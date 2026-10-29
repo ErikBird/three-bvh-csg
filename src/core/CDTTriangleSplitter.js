@@ -135,6 +135,61 @@ function edgesToIndices( edges, sourceEdges, outputVertices, sourceVertices, out
 
 }
 
+// A closed internal constraint is not a hole: retain every cell separated
+// from the exterior by constraints. Adapted from the flood fill in PR #256.
+function removeExteriorCells( cells, halfEdgeMap ) {
+
+	const edgeToCell = new Map();
+	cells.forEach( ( cell, c ) => {
+
+		for ( let e = 0; e < 3; e ++ ) {
+
+			edgeToCell.set( `${ cell[ e ] }_${ cell[ ( e + 1 ) % 3 ] }`, c );
+
+		}
+
+	} );
+
+	const outside = cells.length;
+	const neighbors = Array.from( { length: cells.length + 1 }, () => [] );
+	cells.forEach( ( cell, c ) => {
+
+		for ( let e = 0; e < 3; e ++ ) {
+
+			const p0 = cell[ e ];
+			const p1 = cell[ ( e + 1 ) % 3 ];
+			if ( halfEdgeMap.get( `${ p0 }_${ p1 }` ) !== - 1 ) {
+
+				neighbors[ edgeToCell.get( `${ p1 }_${ p0 }` ) ?? outside ].push( c );
+
+			}
+
+		}
+
+	} );
+
+	const exterior = new Uint8Array( cells.length + 1 );
+	const stack = [ outside ];
+	exterior[ outside ] = 1;
+	while ( stack.length > 0 ) {
+
+		for ( const c of neighbors[ stack.pop() ] ) {
+
+			if ( exterior[ c ] === 0 ) {
+
+				exterior[ c ] = 1;
+				stack.push( c );
+
+			}
+
+		}
+
+	}
+
+	return cells.filter( ( cell, c ) => exterior[ c ] === 0 );
+
+}
+
 export class CDTTriangleSplitter {
 
 	constructor() {
@@ -265,7 +320,7 @@ export class CDTTriangleSplitter {
 		}
 
 		// Run the CDT triangulation
-		const triangulation = cdt2d( cdt2dPoints, indices, { exterior: false } );
+		const allCells = cdt2d( cdt2dPoints, indices );
 
 		// construct the half edge structure, marking the constrained edges as disconnected to
 		// mark the polygon edges
@@ -277,6 +332,8 @@ export class CDTTriangleSplitter {
 			halfEdgeMap.set( `${ pair[ 1 ] }_${ pair[ 0 ] }`, - 1 );
 
 		}
+
+		const triangulation = removeExteriorCells( allCells, halfEdgeMap );
 
 		// create an index key to construct unique indices across the geometry
 		const indexKeyPrefix = `${ baseIndices[ 0 ] }_${ baseIndices[ 1 ] }_${ baseIndices[ 2 ] }_`;
