@@ -86,6 +86,7 @@ export class GeometryBuilder {
 		this.forwardIndexMap = new Map();
 		this.invertedIndexMap = new Map();
 		this.interpolatedFields = {};
+		this.sourceFaces = null;
 
 	}
 
@@ -307,6 +308,34 @@ export class GeometryBuilder {
 
 	}
 
+	appendSourceFace( group, face ) {
+
+		if ( ! this.sourceFaces ) return;
+		if ( ! this.sourceFaces[ group ] ) this.sourceFaces[ group ] = [];
+		this.sourceFaces[ group ].push( face );
+
+	}
+
+	orderedSourceFaces( groupOrder, sourceFaces ) {
+
+		const result = [];
+		for ( const { index } of groupOrder ) {
+
+			const faces = sourceFaces[ index ] || [];
+			if ( faces.length * 3 !== ( this.groupIndices[ index ]?.count || 0 ) ) {
+
+				throw new Error( 'Source face count does not match emitted triangles.' );
+
+			}
+
+			for ( const face of faces ) result.push( face );
+
+		}
+
+		return result;
+
+	}
+
 	buildGeometry( target, groupOrder ) {
 
 		let needsDisposal = false;
@@ -392,6 +421,7 @@ export class GeometryBuilder {
 		const { groupIndices, attributeData } = this;
 
 		this.interpolatedFields = {};
+		this.sourceFaces = null;
 
 		for ( const key in attributeData ) {
 
